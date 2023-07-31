@@ -1,0 +1,6 @@
+/target
+.env
+run.sh
+build.sh
+/resources
+.vscode
