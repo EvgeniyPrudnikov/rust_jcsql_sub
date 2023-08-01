@@ -1,7 +1,7 @@
 
-##rust_jcsql_sub
+## rust_jcsql_sub
 
-Rust client f or jcsql sublime plugin, that executes sql query in
+Rust client for jcsql sublime plugin, that executes sql query in
  - Snoflake
  - Impala
  - Oracle
