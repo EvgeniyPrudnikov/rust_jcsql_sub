@@ -51,7 +51,7 @@ impl ConnectionFn for Impala {
         >,
     >;
 
-    fn execute(&self, q: &str, fetch_num: usize) -> Result<Self::Cursor<'_>, Error> {
+    fn execute(&self, q: &str, fetch_num_size: usize) -> Result<Self::Cursor<'_>, Error> {
         let mut cursor = self.connection.execute(q, ())?.unwrap();
 
         let headline: Vec<String> = cursor.column_names()?.collect::<Result<_, _>>()?;
@@ -59,8 +59,8 @@ impl ConnectionFn for Impala {
 
         let buffers = Box::new(TextRowSet::for_cursor(
             {
-                if BATCH_SIZE > fetch_num {
-                    fetch_num
+                if BATCH_SIZE > fetch_num_size {
+                    fetch_num_size
                 } else {
                     BATCH_SIZE
                 }
@@ -87,7 +87,7 @@ impl ConnectionFn for Impala {
                     });
 
                     let mut row: Vec<String> = Vec::new();
-                    for i in record {
+                    for i in record.into_iter() {
                         row.push(String::from_utf8(i.to_vec()).unwrap());
                     }
                     res_buffer.push(row);

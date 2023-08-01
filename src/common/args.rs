@@ -9,7 +9,7 @@ pub struct Args {
 }
 
 impl Args {
-    pub fn new() -> Self {
+    pub fn parse() -> Self {
         Args {
             engine: match get_nth_arg(1).to_lowercase().as_str() {
                 "impala" => Engines::Impala,
@@ -25,7 +25,7 @@ impl Args {
 
 impl Default for Args {
     fn default() -> Self {
-        Self::new()
+        Self::parse()
     }
 }
 
