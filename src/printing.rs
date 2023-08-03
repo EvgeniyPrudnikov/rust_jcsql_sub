@@ -1,7 +1,5 @@
 use std::io::{self, Result, Write};
 
-// const NEW_LINE_BYTES: &[u8] = &[10];
-
 #[derive(Debug)]
 pub struct ColDesc {
     pub col_id: usize,
