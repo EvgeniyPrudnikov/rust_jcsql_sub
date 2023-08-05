@@ -114,7 +114,7 @@ impl ConnectionFn for Impala {
         let mut res_buffer: Vec<Vec<String>> = Vec::new();
         // Iterate over batches
         let mut fetched = 0;
-        while fetched < fetch_num {
+        while fetched < fetch_num || fetch_num == -1 {
             if let Some(batch) = c.fetch()? {
                 // Within a batch, iterate over every row
                 fetched += batch.num_rows() as i32;
