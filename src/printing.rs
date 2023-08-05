@@ -35,14 +35,27 @@ impl Default for CellSize {
 #[derive(Debug)]
 pub struct CellParams {
     pub value: String,
+    pub value_bytes_cnt: usize,
+    pub value_chars_cnt: usize,
     pub sizes: CellSize,
 }
 
 impl CellParams {
-    pub fn new(value: String, sizes: CellSize) -> Self {
-        Self { value, sizes }
+    pub fn new(
+        value: String,
+        value_bytes_cnt: usize,
+        value_chars_cnt: usize,
+        sizes: CellSize,
+    ) -> Self {
+        Self {
+            value,
+            value_bytes_cnt,
+            value_chars_cnt,
+            sizes,
+        }
     }
 }
+
 #[derive(Debug)]
 pub struct CellLines {
     pub l_top: String,
@@ -132,7 +145,7 @@ pub fn cell_to_print(cp: CellParams) -> CellLines {
         l_val -= 1;
 
         to_print_line.l_val += cp.value.as_str();
-        l_val -= cp.value.len();
+        l_val -= cp.value_chars_cnt;
 
         for _n in 0..l_val {
             to_print_line.l_val += " ";
