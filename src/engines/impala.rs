@@ -11,7 +11,7 @@ use odbc_api::{
     ResultSetMetadata,
 };
 
-const BATCH_SIZE: usize = 5000;
+const MAX_BATCH_SIZE: usize = 5000;
 const MAX_STR_LIMIT: Option<usize> = None;
 
 lazy_static! {
@@ -29,7 +29,7 @@ impl Impala {
     pub fn new(connection_string: String) -> Self {
         let conn = ODBC_ENV
             .connect_with_connection_string(&connection_string, ConnectionOptions::default())
-            .expect("msg");
+            .expect("Error creating the connection");
 
         Impala {
             engine: Engines::Impala,
@@ -55,7 +55,7 @@ impl ConnectionFn for Impala {
     fn execute(
         &self,
         q: &str,
-        fetch_num_size: usize,
+        fetch_num_size: i32,
     ) -> Result<(Vec<ColDesc>, Self::Cursor<'_>), Error> {
         let mut cursor = self.connection.execute(q, ())?.unwrap();
 
@@ -97,10 +97,10 @@ impl ConnectionFn for Impala {
 
         let buffers = Box::new(TextRowSet::for_cursor(
             {
-                if BATCH_SIZE > fetch_num_size {
-                    fetch_num_size
+                if fetch_num_size == -1 || (fetch_num_size as usize) > MAX_BATCH_SIZE {
+                    MAX_BATCH_SIZE
                 } else {
-                    BATCH_SIZE
+                    fetch_num_size as usize
                 }
             },
             &mut cursor,
@@ -110,14 +110,14 @@ impl ConnectionFn for Impala {
         Ok((columns_desc, row_set_cursor))
     }
 
-    fn fetch(&self, c: &mut Self::Cursor<'_>, fetch_num: usize) -> Result<Vec<Vec<String>>, Error> {
+    fn fetch(&self, c: &mut Self::Cursor<'_>, fetch_num: i32) -> Result<Vec<Vec<String>>, Error> {
         let mut res_buffer: Vec<Vec<String>> = Vec::new();
         // Iterate over batches
-        let mut fetched: usize = 0;
+        let mut fetched = 0;
         while fetched < fetch_num {
             if let Some(batch) = c.fetch()? {
                 // Within a batch, iterate over every row
-                fetched += batch.num_rows();
+                fetched += batch.num_rows() as i32;
                 for row_index in 0..batch.num_rows() {
                     // Within a row iterate over every column
                     let record = (0..batch.num_cols()).map(|col_index| {

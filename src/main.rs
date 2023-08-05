@@ -16,8 +16,8 @@ fn main() -> Result<(), Error> {
 
     let raw_query = a.get_query();
 
-    let (col_des, mut c) = i.execute(&raw_query, 100)?;
-    let data = i.fetch(&mut c, 100)?;
+    let (col_des, mut c) = i.execute(&raw_query, a.fetch_num)?;
+    let data = i.fetch(&mut c, a.fetch_num)?;
 
     println!("{:?}", data);
 
