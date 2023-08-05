@@ -19,8 +19,6 @@ fn main() -> Result<(), Error> {
     let (col_des, mut c) = i.execute(&raw_query, a.fetch_num)?;
     let data = i.fetch(&mut c, a.fetch_num)?;
 
-    println!("{:?}", data);
-
     let mut col_max: Vec<usize> = vec![0; col_des.len()];
     upd_header_col_max_lens(&col_des, &mut col_max);
     for i in data.iter() {
