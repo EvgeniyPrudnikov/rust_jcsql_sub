@@ -28,11 +28,11 @@ fn main() -> Result<(), Error> {
     let mut start_msg: Vec<String> = Vec::new();
     let mut end_msg: Vec<String> = Vec::new();
 
-    let i = Impala::new(a.connection_string.clone());
+    let client = Impala::new(a.connection_string.clone());
     start_msg.push(format!(
         "[{}] Connected to {:?}",
         Local::now().format("%Y-%m-%d %H:%M:%S"),
-        i.engine
+        client.engine
     ));
 
     let raw_query = a.get_query();
@@ -47,8 +47,8 @@ fn main() -> Result<(), Error> {
         start_msg.push(query.clone());
 
         let start_time = chrono::Local::now();
-        let (col_desc, mut c) = i.execute(&query, a.fetch_num)?;
-        let data = i.fetch(&mut c, a.fetch_num)?;
+        let (col_desc, mut c) = client.execute(&query, a.fetch_num)?;
+        let data = client.fetch(&mut c, a.fetch_num)?;
         let duration = chrono::Local::now() - start_time;
         end_msg.push(format!("Elapsed {} s", format_duration(duration)));
 
@@ -160,7 +160,7 @@ fn split_queries(queries: String) -> Vec<String> {
             pos.push(i)
         }
 
-        if ch == '\'' && !quote_started {
+        if ch == '\'' && (quote_started || ch == '\n') {
             quote_started = false;
             continue;
         }
@@ -174,7 +174,7 @@ fn split_queries(queries: String) -> Vec<String> {
         res.push(substring.to_owned());
         start_index = end_index + 1;
     }
-
+    // rest of string
     let substring = queries.get(start_index..).unwrap_or("").trim();
     if !substring.is_empty() {
         res.push(substring.to_string());

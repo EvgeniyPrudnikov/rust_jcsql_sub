@@ -68,7 +68,7 @@ impl ConnectionFn for Impala {
                 cursor.col_name(col_idx)?,
                 match cursor.col_data_type(col_idx)? {
                     DataType::Char { .. } => "Char",
-                    DataType::WChar { .. } => "WChar",
+                    DataType::WChar { .. } => "Varchar",
                     DataType::Numeric { .. } => "Numeric",
                     DataType::Decimal { .. } => "Decimal",
                     DataType::Integer => "Integer",
@@ -86,7 +86,7 @@ impl ConnectionFn for Impala {
                     DataType::Varbinary { .. } => "Varbinary",
                     DataType::Binary { .. } => "Binary",
                     DataType::Other { .. } => "Other",
-                    DataType::WVarchar { .. } => "NVARCHAR",
+                    DataType::WVarchar { .. } => "NVarchar",
                     DataType::LongVarchar { .. } => "TEXT",
                     DataType::LongVarbinary { .. } => "BLOB",
                     DataType::Unknown => "Unknown",
