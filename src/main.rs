@@ -9,7 +9,7 @@ use engines::impala::Impala;
 
 use crate::printing::{CellLines, CellParams, CellSize};
 use chrono::{Duration, Local};
-use std::collections::VecDeque;
+// use std::collections::VecDeque;
 
 fn format_duration(duration: Duration) -> String {
     let hours = duration.num_hours();
@@ -36,18 +36,31 @@ fn main() -> Result<(), Error> {
     ));
 
     let raw_query = a.get_query();
-    start_msg.push(raw_query.clone());
+    let queries = split_queries(raw_query);
+    let queries_cnt = queries.len();
 
-    let start_time = chrono::Local::now();
-    let (col_desc, mut c) = i.execute(&raw_query, a.fetch_num)?;
-    let data = i.fetch(&mut c, a.fetch_num)?;
-    let duration = chrono::Local::now() - start_time;
-    end_msg.push(format!("Elapsed {} s", format_duration(duration)));
+    for query in queries {
+        if query.is_empty() {
+            panic!("Empty query!");
+        }
 
-    //------ process data ----------------
-    let print_buffer = to_print_buffer(&col_desc, &data);
-    //------ print result ----------------
-    print_message(&start_msg, print_buffer, &end_msg);
+        start_msg.push(query.clone());
+
+        let start_time = chrono::Local::now();
+        let (col_desc, mut c) = i.execute(&query, a.fetch_num)?;
+        let data = i.fetch(&mut c, a.fetch_num)?;
+        let duration = chrono::Local::now() - start_time;
+        end_msg.push(format!("Elapsed {} s", format_duration(duration)));
+
+        //------ process data ----------------
+        let print_buffer = to_print_buffer(&col_desc, &data);
+        //------ print result ----------------
+        print_message(&start_msg, print_buffer, &end_msg);
+        if queries_cnt > 1 {
+            start_msg.pop();
+            end_msg.pop();
+        }
+    }
 
     Ok(())
 }
@@ -83,7 +96,7 @@ fn print_message(
     for i in print_buffer {
         printing::print_cells_line(i);
     }
-    println!("\nFetched {} rows", fetched);
+    println!("\nFetched {} rows", fetched - 1);
 
     for emsg in end_msg {
         println!("{}\n", emsg);
@@ -130,4 +143,42 @@ fn to_print_buffer(header: &Vec<ColDesc>, data: &Vec<Vec<String>>) -> Vec<Vec<Ce
         print_buffer.push(print_row);
     }
     print_buffer
+}
+
+fn split_queries(queries: String) -> Vec<String> {
+    let mut res: Vec<String> = Vec::new();
+    let mut quote_started = false;
+
+    let mut pos: Vec<usize> = Vec::new();
+
+    for (i, ch) in queries.chars().enumerate() {
+        if ch == '\'' && !quote_started {
+            quote_started = true;
+            continue;
+        }
+        if ch == ';' && !quote_started {
+            pos.push(i)
+        }
+
+        if ch == '\'' && !quote_started {
+            quote_started = false;
+            continue;
+        }
+    }
+
+    let mut start_index = 0;
+    let mut end_index;
+    for m in pos {
+        end_index = m;
+        let substring = queries.get(start_index..end_index).unwrap_or("").trim();
+        res.push(substring.to_owned());
+        start_index = end_index + 1;
+    }
+
+    let substring = queries.get(start_index..).unwrap_or("").trim();
+    if !substring.is_empty() {
+        res.push(substring.to_string());
+    }
+
+    res
 }

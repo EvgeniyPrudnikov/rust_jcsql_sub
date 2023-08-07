@@ -12,6 +12,9 @@ pub struct Args {
 
 impl Args {
     pub fn parse() -> Self {
+        if std::env::args().count() < 6 {
+            panic!("Not enougth args!")
+        }
         Args {
             engine: match get_nth_arg(1).to_lowercase().as_str() {
                 "impala" => Engines::Impala,
