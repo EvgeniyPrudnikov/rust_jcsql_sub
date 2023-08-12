@@ -1,3 +1,7 @@
+use std::collections::VecDeque;
+use std::sync::{mpsc, Arc, Mutex};
+use std::thread;
+
 use anyhow::Error;
 use common::{eng::ColDesc, ConnectionFn};
 
@@ -9,7 +13,9 @@ use engines::impala::Impala;
 
 use crate::printing::{CellLines, CellParams, CellSize};
 use chrono::{Duration, Local};
-// use std::collections::VecDeque;
+
+const PRINT_LOAD: &str = "(...)";
+const FETCHED_ALL_ROWS: &str = "Fetched all rows.";
 
 fn format_duration(duration: Duration) -> String {
     let hours = duration.num_hours();
@@ -28,7 +34,14 @@ fn main() -> Result<(), Error> {
     let mut start_msg: Vec<String> = Vec::new();
     let mut end_msg: Vec<String> = Vec::new();
 
-    let client = Impala::new(a.connection_string.clone());
+    let client = match a.engine {
+        common::Engines::Impala => Impala::new(a.connection_string.clone()),
+        _ => {
+            println!("Not Implemented");
+            std::process::exit(1)
+        }
+    };
+
     start_msg.push(format!(
         "[{}] Connected to {:?}",
         Local::now().format("%Y-%m-%d %H:%M:%S"),
@@ -38,6 +51,10 @@ fn main() -> Result<(), Error> {
     let raw_query = a.get_query();
     let queries = split_queries(raw_query);
     let queries_cnt = queries.len();
+    let mut is_fetched_all_rows = false;
+    let mut result_buffer = Vec::new();
+    let mut columns_description = Vec::new();
+    let mut cursor = None;
 
     for query in queries {
         if query.is_empty() {
@@ -46,29 +63,118 @@ fn main() -> Result<(), Error> {
 
         start_msg.push(query.clone());
 
-        let start_time = chrono::Local::now();
-        let (col_desc, mut c) = match client.execute(&query, a.fetch_num) {
-            Ok((col_desc, c)) => (col_desc, c),
+        let start_time = Local::now();
+        match client.execute(&query, a.fetch_num) {
+            Ok((col_desc, c)) => {
+                cursor = c;
+                columns_description = col_desc;
+            }
             Err(e) => {
-                println!("{}", e);
+                // println!("{}", e);
+                start_msg.push(e.to_string());
+                print_message(&start_msg, None, &end_msg);
                 std::process::exit(1);
             }
         };
-        let data = client.fetch(&mut c, a.fetch_num)?;
-        let duration = chrono::Local::now() - start_time;
+        let (data, fetched_all_rows) = client.fetch(cursor.as_mut().unwrap(), a.fetch_num)?;
+        is_fetched_all_rows = fetched_all_rows;
+        result_buffer = data;
+
+        let duration = Local::now() - start_time;
         end_msg.push(format!("Elapsed {} s", format_duration(duration)));
 
         //------ process data ----------------
-        let print_buffer = to_print_buffer(&col_desc, &data);
+        let print_buffer = to_print_buffer(&columns_description, &result_buffer);
         //------ print result ----------------
-        print_message(&start_msg, print_buffer, &end_msg);
+        print_message(&start_msg, Some(print_buffer), &end_msg);
         if queries_cnt > 1 {
             start_msg.pop();
             end_msg.pop();
         }
     }
 
-    Ok(())
+    if !is_fetched_all_rows {
+        println!("{}", PRINT_LOAD);
+        end_msg.push(PRINT_LOAD.to_string());
+    } else {
+        println!("{}", FETCHED_ALL_ROWS);
+    }
+
+    let input_deque: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::new()));
+    // Clone the Deque for the separate thread to use
+    let deque_clone = Arc::clone(&input_deque);
+    // Create a channel to communicate between main thread and separate thread
+    let (sender, receiver) = mpsc::channel();
+    // Spawn a separate thread to listen for user input
+    thread::spawn(move || {
+        loop {
+            let mut input = String::new();
+            match std::io::stdin().read_line(&mut input) {
+                Ok(_) => {
+                    deque_clone
+                        .lock()
+                        .unwrap()
+                        .push_back(input.trim().to_string());
+                    sender.send(()).unwrap(); // Notify the main thread
+                }
+                Err(error) => println!("Error: {}", error),
+            }
+        }
+    });
+
+    // default timeout 30 sec
+    let mut timeout = Duration::seconds(5);
+    loop {
+        // Wait for notification from the separate thread or timeout
+        if receiver.recv_timeout(timeout.to_std().unwrap()).is_err() {
+            print!("done");
+            return Ok(());
+        } else {
+            timeout = timeout + Duration::seconds(5);
+
+            // Process the input from the Deque in the main thread
+            while let Some(input) = input_deque.lock().unwrap().pop_front() {
+                let mut parts = input.split("==").collect::<Vec<&str>>();
+                let fetch_num = parts.pop().unwrap().parse::<i32>()?;
+                let cmd = parts.pop().unwrap().to_string();
+
+                if cmd == "load" {
+                    println!("is_fetched_all_rows = {}", is_fetched_all_rows);
+                    if !is_fetched_all_rows {
+                        let (mut data, fetched_all_rows) =
+                            client.fetch(cursor.as_mut().unwrap(), fetch_num)?;
+                        is_fetched_all_rows = fetched_all_rows;
+                        result_buffer.append(&mut data);
+
+                        if is_fetched_all_rows {
+                            if let Some(last_element) = end_msg.last_mut() {
+                                *last_element = FETCHED_ALL_ROWS.to_string(); // Update the value of the last element
+                            }
+                        }
+                    } else if let Some(last_element) = end_msg.last_mut() {
+                        *last_element = FETCHED_ALL_ROWS.to_string(); // Update the value of the last element
+                    }
+
+                    let print_buffer = to_print_buffer(&columns_description, &result_buffer);
+                    print_message(&start_msg, Some(print_buffer), &end_msg);
+                } else if cmd == "csv" {
+                    println!("LOL")
+                } else {
+                    break;
+                }
+                /*
+                elif cmd[0] == 'csv':
+                    if not is_fetched_all_rows:
+                        is_fetched_all_rows = fetch_data(cur, output, int(cmd[1]), is_fetched_all_rows)
+                    cvs_print_result(output)
+                    # break
+                else:
+                    break
+
+                     */
+            }
+        }
+    }
 }
 
 fn upd_data_col_max_lens(data_row: &[String], max_len: &mut [usize]) {
@@ -91,18 +197,20 @@ fn upd_header_col_max_lens(header_row: &[ColDesc], max_len: &mut [usize]) {
 
 fn print_message(
     start_msg: &Vec<String>,
-    print_buffer: Vec<Vec<CellLines>>,
+    print_buffer: Option<Vec<Vec<CellLines>>>,
     end_msg: &Vec<String>,
 ) {
     for smsg in start_msg {
         println!("{}\n", smsg);
     }
 
-    let fetched = print_buffer.len();
-    for i in print_buffer {
-        printing::print_cells_line(i);
+    if let Some(print_buffer) = print_buffer {
+        let fetched = print_buffer.len();
+        for i in print_buffer {
+            printing::print_cells_line(i);
+        }
+        println!("\nFetched {} rows", fetched - 1);
     }
-    println!("\nFetched {} rows", fetched - 1);
 
     for emsg in end_msg {
         println!("{}\n", emsg);

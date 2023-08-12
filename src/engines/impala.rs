@@ -56,7 +56,7 @@ impl ConnectionFn for Impala {
         &self,
         q: &str,
         fetch_num_size: i32,
-    ) -> Result<(Vec<ColDesc>, Self::Cursor<'_>), Error> {
+    ) -> Result<(Vec<ColDesc>, Option<Self::Cursor<'_>>), Error> {
         let mut cursor = self.connection.execute(q, ())?.unwrap();
 
         let mut columns_desc: Vec<ColDesc> = Vec::new();
@@ -107,10 +107,10 @@ impl ConnectionFn for Impala {
             MAX_STR_LIMIT,
         )?);
         let row_set_cursor = Box::new(cursor.bind_buffer(*buffers)?);
-        Ok((columns_desc, row_set_cursor))
+        Ok((columns_desc, Some(row_set_cursor)))
     }
 
-    fn fetch(&self, c: &mut Self::Cursor<'_>, fetch_num: i32) -> Result<Vec<Vec<String>>, Error> {
+    fn fetch(&self, c: &mut Self::Cursor<'_>, fetch_num: i32) -> Result<(Vec<Vec<String>>, bool), Error> {
         let mut res_buffer: Vec<Vec<String>> = Vec::new();
         // Iterate over batches
         let mut fetched = 0;
@@ -134,6 +134,7 @@ impl ConnectionFn for Impala {
                 break;
             }
         }
-        Ok(res_buffer)
+        let fetched_all_rows = fetched == 0 || fetched < fetch_num - 1;
+        Ok((res_buffer, fetched_all_rows))
     }
 }
