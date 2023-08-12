@@ -51,7 +51,7 @@ fn main() -> Result<(), Error> {
             Ok((col_desc, c)) => (col_desc, c),
             Err(e) => {
                 println!("{}", e);
-                panic!()
+                std::process::exit(1);
             }
         };
         let data = client.fetch(&mut c, a.fetch_num)?;
