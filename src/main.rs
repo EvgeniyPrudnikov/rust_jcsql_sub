@@ -47,7 +47,13 @@ fn main() -> Result<(), Error> {
         start_msg.push(query.clone());
 
         let start_time = chrono::Local::now();
-        let (col_desc, mut c) = client.execute(&query, a.fetch_num)?;
+        let (col_desc, mut c) = match client.execute(&query, a.fetch_num) {
+            Ok((col_desc, c)) => (col_desc, c),
+            Err(e) => {
+                println!("{}", e);
+                panic!()
+            }
+        };
         let data = client.fetch(&mut c, a.fetch_num)?;
         let duration = chrono::Local::now() - start_time;
         end_msg.push(format!("Elapsed {} s", format_duration(duration)));
